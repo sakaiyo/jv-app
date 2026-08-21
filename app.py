@@ -61,21 +61,29 @@ if uploaded_files:
         except Exception as e:
             st.error(f"Failed to load image {idx+1}: {e}")
 
+# 「Made in Japan」チェックボックス
+is_made_in_japan = st.checkbox("🇯🇵 Made in Japan (Apply valuation premium)")
+
 # 査定ボタン
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     with st.spinner("Analyzing tags, materials, and details..."):
         try:
-            # Tag Note項目を追加した最新プロンプト
-            prompt_text = """
+            # Made in Japanの有無に応じたプロンプト指示の分岐
+            japan_premium_instruction = ""
+            if is_made_in_japan:
+                japan_premium_instruction = """
+                - IMPORTANT: The user has confirmed that this item is "Made in Japan". 
+                  Please explicitly specify "Made in Japan" under Origin. 
+                  Factor in the premium craftsmanship and high vintage demand for Japanese-made garments when determining the Suggested Retail Price (increase valuation slightly compared to standard items).
+                """
+
+            prompt_text = f"""
             You are an expert appraiser and curator for high-end Japanese vintage and archival fashion, serving a global market of collectors and enthusiasts.
 
             【Background & Context】
             - All items are authentically handpicked and sourced directly from Japan (Sourced from Japan).
             - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
-
-            【Requirements for Tag Note Field】
-            - A super short, ultra-catchy one-liner or phrase (3-7 words) designed to be handwritten on physical price tags.
-            - Examples: "Rare 90s Japanese Wool", "100% Silk / Made in Japan", "Archival Cut / Mint Condition".
+            {japan_premium_instruction}
 
             【Requirements for Description Field】
             - Keep it CONCISE and impactful (strictly 2-3 sentences total, approx. 50 words).
@@ -87,11 +95,10 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             3. Size: (Tag size, or estimated size if missing)
             4. Material: (e.g., 100% Wool, Cotton Blend)
             5. Era: (e.g., 1990s, Early 2000s, Vintage)
-            6. Origin: Sourced from Japan (Include "Made in Japan" or spec details if visible on tag)
+            6. Origin: Sourced from Japan (Add "Made in Japan" if confirmed or visible)
             7. Suggested Retail Price: (Estimated market price in AUD $)
-            8. Tag Note: (Ultra-short catchy phrase for handwritten price tags, e.g., "Rare 90s Wool / Sourced from Japan")
-            9. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
-            10. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
+            8. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
+            9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
             """
 
             # データを通信用に組み立て
