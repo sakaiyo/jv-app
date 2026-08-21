@@ -1,30 +1,37 @@
 import base64
 import io
+import os
 import requests
 from PIL import Image
 from pillow_heif import register_heif_opener
 import streamlit as st
 
-# HEIC（iPhone画像）をPillowで読み込めるように登録
+# HEIC（iPhone画像）対応の登録
 register_heif_opener()
 
 # 画面設定
-st.set_page_config(page_title="古着AI査定・データ作成", layout="wide")
-st.title("👕 古着AI査定 & データ作成アプリ (3枚一括)")
+st.set_page_config(page_title="Vintage AI Evaluator", layout="wide")
+st.title("👕 Vintage AI Evaluator & Data Generator")
 
-# サイドバーでAPIキー入力
-st.sidebar.header("設定")
-api_key = st.sidebar.text_input("Gemini API Keyを入力", type="password")
+# APIキーの自動読み込み（Streamlit Secrets -> サイドバー手入力の優先順）
+api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+# 万が一Secrets未設定の場合のバックアップ用入力欄
+if not api_key:
+    st.sidebar.header("Settings")
+    api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
 
 if not api_key:
-    st.warning("👈 左側のサイドバーに Gemini API Key を入力してください。")
+    st.warning("👈 Please set GEMINI_API_KEY in Streamlit Secrets.")
     st.stop()
 
-# 画像アップローダー（HEIC / JPG / PNG 対応）
-st.subheader("1. 写真を3枚アップロード")
-st.caption("①全体画像  ②ブランドタグ  ③品質表示・サイズタグ")
+# 画像アップローダー
+st.subheader("1. Upload 3 Photos")
+st.caption(
+    "① Full Item View  ② Brand/Neck Tag  ③ Care/Size/Material Tag"
+)
 uploaded_files = st.file_uploader(
-    "写真をまとめて選択してください (HEIC / JPG / PNG 対応)",
+    "Select photos (HEIC, JPG, PNG supported)",
     type=["jpg", "jpeg", "png", "heic", "heif"],
     accept_multiple_files=True,
 )
@@ -37,34 +44,42 @@ if uploaded_files:
             img = Image.open(file)
             images.append(img)
             with cols[idx]:
-                st.image(img, caption=f"写真 {idx+1}", use_container_width=True)
+                st.image(
+                    img, caption=f"Photo {idx+1}", use_container_width=True
+                )
         except Exception as e:
-            st.error(f"写真 {idx+1} の読み込みに失敗しました: {e}")
+            st.error(f"Failed to load image {idx+1}: {e}")
 
 # 査定ボタン
-if st.button("🚀 AI査定実行", type="primary", disabled=not images):
-    with st.spinner("タグや素材、デザインを分析中..."):
+if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
+    with st.spinner("Analyzing tags, materials, and details..."):
         try:
-            # プロンプト（指示文）の設定
+            # 英語化 & プロンプトの全面刷新
             prompt_text = """
-            あなたはオーストラリア・ビクトリア州Fitzroy（フィッツロイ）にある「日本発の古着・ヴィンテージ専門店（Japanese Vintage Shop）」の優秀な専門査定員およびECデータ作成者です。
+            You are an expert appraiser and curator for high-end Japanese vintage and archival fashion, serving a global market of collectors and enthusiasts.
 
-            【背景と前提条件】
-            ・商品はすべて日本国内で買い付け・厳選（Sourced / Handpicked from Japan）された、クオリティの高い日本の古着・ヴィンテージ品です。
-            ・オーストラリア・フィッツロイの感度の高い古着市場トレンド、および当店（Japanese Vintage専門店）のブランド価値にふさわしい販売価格（AUD $）を査定してください。
+            【Background & Context】
+            - All items are authentically handpicked and sourced directly from Japan (Sourced from Japan).
+            - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
 
-            提供された複数枚の写真（全体、ブランドタグ、品質表示タグ等）を総合的に分析して、以下のフォーマットで出力してください。
+            【Requirements for Description Field】
+            - Write a compelling description aimed at a global audience.
+            - DO NOT mention generic local shop context or abstract fluff.
+            - Include:
+              1. Brand background/context (especially if it is a Japanese domestic or niche designer brand).
+              2. Key structural/design details and material highlights observed from the images.
+              3. Vintage/archival significance or interesting trivia that justifies the evaluation (e.g., specific tag era, RN/CA numbers, unique stitching, Japanese manufacturing quality).
 
-            【出力フォーマット】
-            1. ブランド名 (Brand):
-            2. カテゴリ (Category): (例: T-Shirt, Jeans, Jacket)
-            3. サイズ (Size): (タグ表記のサイズ、不明なら推定サイズ)
-            4. 素材 (Material): (例: Cotton 100%)
-            5. 推定年代 (Era): (例: 1990s, 2000s, Unknown)
-            6. 仕入れ地 / 規格 (Origin): Sourced from Japan (日本規格や日本製等の記載があれば併記)
-            7. 推奨販売価格 (Suggested Price): (Fitzroyの店舗で販売する適正価格をオーストラリアドル $ で表示)
-            8. 商品説明文 (Description): (日本から厳選された仕入れ背景、アイテムの魅力やコンディションを踏まえた店頭・EC用の説明文 2-3文)
-            9. Square用タイトル (Square Title): (例: Levi's 501 Jeans - W32 L30)
+            【Output Format】(Respond strictly in English using the exact keys below)
+            1. Brand: 
+            2. Category: (e.g., Tailored Jacket, Denim Jeans, Graphic Tee)
+            3. Size: (Tag size, or estimated size if missing)
+            4. Material: (e.g., 100% Wool, Cotton Blend)
+            5. Era: (e.g., 1990s, Early 2000s, Vintage)
+            6. Origin: Sourced from Japan (Include "Made in Japan" or spec details if visible on tag)
+            7. Suggested Retail Price: (Estimated market price in AUD $)
+            8. Description: (3-4 sentences highlighting brand lore, item details, material, and vintage appraisal notes/trivia)
+            9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
             """
 
             # データを通信用に組み立て
@@ -97,14 +112,14 @@ if st.button("🚀 AI査定実行", type="primary", disabled=not images):
                 result_text = res_data["candidates"][0]["content"]["parts"][0][
                     "text"
                 ]
-                st.success("分析が完了しました！")
+                st.success("Evaluation complete!")
                 st.markdown("---")
-                st.subheader("📊 査定結果")
+                st.subheader("📊 Appraisal & Listing Data")
                 st.markdown(result_text)
             else:
                 st.error(
-                    f"APIエラー ({response.status_code}): {res_data.get('error', {}).get('message', '不明なエラー')}"
+                    f"API Error ({response.status_code}): {res_data.get('error', {}).get('message', 'Unknown error')}"
                 )
 
         except Exception as e:
-            st.error(f"エラーが発生しました: {e}")
+            st.error(f"An error occurred: {e}")
