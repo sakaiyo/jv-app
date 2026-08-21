@@ -16,7 +16,6 @@ st.title("👕 Vintage AI Evaluator & Data Generator")
 # APIキーの自動読み込み（Streamlit Secrets -> サイドバー手入力の優先順）
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# 万が一Secrets未設定の場合のバックアップ用入力欄
 if not api_key:
     st.sidebar.header("Settings")
     api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
@@ -25,15 +24,27 @@ if not api_key:
     st.warning("👈 Please set GEMINI_API_KEY in Streamlit Secrets.")
     st.stop()
 
+
+# リセット機能用キーの初期化
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
+
+# 画面最上部にクリアボタンと新規査定エリアを配置
+col_title, col_reset = st.columns([3, 1])
+with col_reset:
+    if st.button("🧹 Reset / Clear All", use_container_width=True):
+        st.session_state["uploader_key"] += 1
+        st.rerun()
+
 # 画像アップローダー
 st.subheader("1. Upload 3 Photos")
-st.caption(
-    "① Full Item View  ② Brand/Neck Tag  ③ Care/Size/Material Tag"
-)
+st.caption("① Full Item View  ② Brand/Neck Tag  ③ Care/Size/Material Tag")
+
 uploaded_files = st.file_uploader(
     "Select photos (HEIC, JPG, PNG supported)",
     type=["jpg", "jpeg", "png", "heic", "heif"],
     accept_multiple_files=True,
+    key=f"uploader_{st.session_state['uploader_key']}",
 )
 
 images = []
@@ -54,7 +65,7 @@ if uploaded_files:
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     with st.spinner("Analyzing tags, materials, and details..."):
         try:
-            # 英語化 & プロンプトの全面刷新
+            # Tag Note項目を追加した最新プロンプト
             prompt_text = """
             You are an expert appraiser and curator for high-end Japanese vintage and archival fashion, serving a global market of collectors and enthusiasts.
 
@@ -62,13 +73,13 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             - All items are authentically handpicked and sourced directly from Japan (Sourced from Japan).
             - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
 
+            【Requirements for Tag Note Field】
+            - A super short, ultra-catchy one-liner or phrase (3-7 words) designed to be handwritten on physical price tags.
+            - Examples: "Rare 90s Japanese Wool", "100% Silk / Made in Japan", "Archival Cut / Mint Condition".
+
             【Requirements for Description Field】
-            - Write a compelling description aimed at a global audience.
-            - DO NOT mention generic local shop context or abstract fluff.
-            - Include:
-              1. Brand background/context (especially if it is a Japanese domestic or niche designer brand).
-              2. Key structural/design details and material highlights observed from the images.
-              3. Vintage/archival significance or interesting trivia that justifies the evaluation (e.g., specific tag era, RN/CA numbers, unique stitching, Japanese manufacturing quality).
+            - Keep it CONCISE and impactful (strictly 2-3 sentences total, approx. 50 words).
+            - Highlight key brand lore/origin, material quality, and notable design or vintage appraisal details without fluff.
 
             【Output Format】(Respond strictly in English using the exact keys below)
             1. Brand: 
@@ -78,8 +89,9 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             5. Era: (e.g., 1990s, Early 2000s, Vintage)
             6. Origin: Sourced from Japan (Include "Made in Japan" or spec details if visible on tag)
             7. Suggested Retail Price: (Estimated market price in AUD $)
-            8. Description: (3-4 sentences highlighting brand lore, item details, material, and vintage appraisal notes/trivia)
-            9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
+            8. Tag Note: (Ultra-short catchy phrase for handwritten price tags, e.g., "Rare 90s Wool / Sourced from Japan")
+            9. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
+            10. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
             """
 
             # データを通信用に組み立て
