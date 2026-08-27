@@ -95,9 +95,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             japan_premium_instruction = ""
             if is_made_in_japan:
                 japan_premium_instruction = """
-                - IMPORTANT: The user has confirmed that this item is "Made in Japan". 
-                  Please explicitly specify "Made in Japan" under Origin. 
-                  Factor in the premium craftsmanship and high vintage demand for Japanese-made garments when determining the Suggested Retail Price.
+                - Made in Japan Premium: The user has confirmed this item is "Made in Japan". Specify "Made in Japan" under Origin and apply a modest, realistic price adjustment for Japanese craftsmanship.
                 """
 
             # 追加情報・修正指示のプロンプト指示
@@ -108,11 +106,19 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                   Prioritize this user-provided information over purely visual guessing if there is a conflict (e.g., override brand name, material, or era as specified by the user).
                 """
 
+            # メルボルンFitzroy店舗用のリアルな評価プロンプト
             prompt_text = f"""
-            You are an expert appraiser and curator for high-end Japanese vintage and archival fashion, serving a global market of collectors and enthusiasts.
+            You are an experienced store buyer and pricing specialist for "HOME", a curated vintage & secondhand fashion store located in Fitzroy, Melbourne, Australia.
+
+            【Core Pricing Philosophy - VERY IMPORTANT】
+            - Target Market: Physical store in Fitzroy, Melbourne & local Australian webstore.
+            - Currency: Australian Dollars (AUD $).
+            - Pricing Goal: Provide a REALISTIC, FAIR, and SELLABLE retail price in AUD that balances healthy store profit margin with good inventory turnover.
+            - DO NOT base prices on hyper-inflated top-tier international online asking prices (e.g., peak Grailed or eBay asking prices).
+            - Be realistic about tags and origins: Rare 80s/90s Made in Japan grails command higher value, but standard commercial streetwear lines, general brand items, or Made in China/Vietnam garments must be priced pragmatically for immediate store sales in Melbourne.
 
             【Background & Context】
-            - All items are authentically handpicked and sourced directly from Japan (Sourced from Japan).
+            - All items are authentically handpicked and sourced directly from Japan.
             - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
             {japan_premium_instruction}
             {user_notes_instruction}
@@ -132,7 +138,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             4. Material: (e.g., 100% Wool, Cotton Blend)
             5. Era: (e.g., 1990s, Early 2000s, Vintage)
             6. Origin: Sourced from Japan (Add "Made in Japan" if confirmed or visible)
-            7. Suggested Retail Price: (Estimated market price in AUD $)
+            7. Suggested Retail Price: (Realistic Fitzroy retail price in AUD $, e.g., $280 AUD)
             8. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
             9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
             10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
