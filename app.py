@@ -13,17 +13,34 @@ register_heif_opener()
 st.set_page_config(page_title="Vintage AI Evaluator", layout="wide")
 st.title("👕 Vintage AI Evaluator & Data Generator")
 
-# APIキーの自動読み込み（Streamlit Secrets -> サイドバー手入力の優先順）
+# Secretsからの安全な呼び出し
 api_key = st.secrets.get("GEMINI_API_KEY", "")
+correct_password = st.secrets.get("APP_PASSWORD", "")
 
-if not api_key:
-    st.sidebar.header("Settings")
-    api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
+# 🔑 パスワード認証機能
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.subheader("🔒 Password Required")
+    user_input = st.text_input(
+        "Enter password to use the app", type="password"
+    )
+
+    if st.button("Login"):
+        if user_input == correct_password:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+
+    st.stop()  # パスワード不一致時は処理を中断
+
+# --- ログイン成功時のみ以下を表示 ---
 
 if not api_key:
     st.warning("👈 Please set GEMINI_API_KEY in Streamlit Secrets.")
     st.stop()
-
 
 # リセット機能用キーの初期化
 if "uploader_key" not in st.session_state:
@@ -61,20 +78,34 @@ if uploaded_files:
         except Exception as e:
             st.error(f"Failed to load image {idx+1}: {e}")
 
-# 「Made in Japan」チェックボックス
+# オプション機能エリア
 is_made_in_japan = st.checkbox("🇯🇵 Made in Japan (Apply valuation premium)")
+
+# 📝 追加情報・修正指示用のテキスト入力欄
+additional_info = st.text_input(
+    "📝 Additional Info / Notes (Optional)",
+    placeholder="e.g., Brand is actually Yohji Yamamoto / Material is 100% Wool / Era is late 80s",
+)
 
 # 査定ボタン
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     with st.spinner("Analyzing tags, materials, and details..."):
         try:
-            # Made in Japanの有無に応じたプロンプト指示の分岐
+            # Made in Japan のプロンプト指示
             japan_premium_instruction = ""
             if is_made_in_japan:
                 japan_premium_instruction = """
                 - IMPORTANT: The user has confirmed that this item is "Made in Japan". 
                   Please explicitly specify "Made in Japan" under Origin. 
-                  Factor in the premium craftsmanship and high vintage demand for Japanese-made garments when determining the Suggested Retail Price (increase valuation slightly compared to standard items).
+                  Factor in the premium craftsmanship and high vintage demand for Japanese-made garments when determining the Suggested Retail Price.
+                """
+
+            # 追加情報・修正指示のプロンプト指示
+            user_notes_instruction = ""
+            if additional_info.strip():
+                user_notes_instruction = f"""
+                - CRITICAL USER CORRECTION / NOTES: The user provided the following supplementary context: "{additional_info.strip()}".
+                  Prioritize this user-provided information over purely visual guessing if there is a conflict (e.g., override brand name, material, or era as specified by the user).
                 """
 
             prompt_text = f"""
@@ -84,10 +115,15 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             - All items are authentically handpicked and sourced directly from Japan (Sourced from Japan).
             - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
             {japan_premium_instruction}
+            {user_notes_instruction}
 
             【Requirements for Description Field】
             - Keep it CONCISE and impactful (strictly 2-3 sentences total, approx. 50 words).
             - Highlight key brand lore/origin, material quality, and notable design or vintage appraisal details without fluff.
+
+            【Requirements for Tag Title Field】
+            - Ultra-short, catchy, and concise phrase (3-7 words max) designed for handwritten paper price tags.
+            - Examples: "Rare 90s Wool Trench Coat", "100% Silk / Made in Japan", "Archival 2000s Graphic Tee".
 
             【Output Format】(Respond strictly in English using the exact keys below)
             1. Brand: 
@@ -99,12 +135,11 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             7. Suggested Retail Price: (Estimated market price in AUD $)
             8. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
             9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
+            10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
             """
 
-            # データを通信用に組み立て
             contents_parts = [{"text": prompt_text}]
 
-            # アップロードされた画像をBase64形式に変換
             for img in images:
                 buffered = io.BytesIO()
                 img_rgb = img.convert("RGB")
@@ -120,7 +155,6 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                     }
                 )
 
-            # Gemini API呼び出し
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
             payload = {"contents": [{"parts": contents_parts}]}
 
