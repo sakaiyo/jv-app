@@ -1,7 +1,6 @@
 import base64
 import io
 import os
-import time
 from PIL import Image
 from pillow_heif import register_heif_opener
 import requests
@@ -90,7 +89,7 @@ additional_info = st.text_input(
 
 # 査定ボタン
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
-    with st.spinner("Analyzing tags, materials, and details..."):
+    with st.spinner("⚡ Processing photos & analyzing..."):
         try:
             japan_premium_instruction = ""
             if is_made_in_japan:
@@ -144,12 +143,12 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
 
             contents_parts = [{"text": prompt_text}]
 
-            # 画像データ変換処理（長辺1200pxにリサイズして通信を高速化）
+            # 高速化のため画像を最適サイズ（長辺800px & 80%品質）に超軽量化
             for img in images:
                 buffered = io.BytesIO()
                 img_rgb = img.convert("RGB")
-                img_rgb.thumbnail((1200, 1200))
-                img_rgb.save(buffered, format="JPEG", quality=85)
+                img_rgb.thumbnail((800, 800))
+                img_rgb.save(buffered, format="JPEG", quality=80)
                 img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
                 contents_parts.append(
@@ -161,8 +160,12 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                     }
                 )
 
-            # 現在稼働中のモデルのみ指定（非推奨・廃止モデルを除外）
-            candidate_models = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+            # 最新・爆速のモデル順にチェック
+            candidate_models = [
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-flash",
+                "gemini-3.5-flash",
+            ]
 
             payload = {"contents": [{"parts": contents_parts}]}
             success = False
@@ -170,13 +173,11 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             last_error_msg = ""
 
             for model_name in candidate_models:
-                if success:
-                    break
-
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
                 try:
-                    response = requests.post(url, json=payload, timeout=12)
+                    # タイムアウトを30秒に拡大して安定接続
+                    response = requests.post(url, json=payload, timeout=30)
                     res_data = response.json()
 
                     if response.status_code == 200:
@@ -190,7 +191,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                             "message", f"HTTP {response.status_code}"
                         )
                 except requests.exceptions.Timeout:
-                    last_error_msg = f"{model_name} timed out"
+                    last_error_msg = f"{model_name} timeout"
                 except Exception as req_err:
                     last_error_msg = str(req_err)
 
@@ -201,7 +202,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                 st.markdown(result_text)
             else:
                 st.error(
-                    f"Server is currently busy. Please try again in a few moments. (Details: {last_error_msg})"
+                    f"Server response took too long. Please try clicking Evaluate again. (Details: {last_error_msg})"
                 )
 
         except Exception as e:
