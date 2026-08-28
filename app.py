@@ -144,10 +144,13 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
 
             contents_parts = [{"text": prompt_text}]
 
+            # 画像データ変換処理
             for img in images:
                 buffered = io.BytesIO()
                 img_rgb = img.convert("RGB")
-                img_rgb.save(buffered, format="JPEG")
+                # リサイズ処理を追加して通信量を抑え高速化（最大1200px）
+                img_rgb.thumbnail((1200, 1200))
+                img_rgb.save(buffered, format="JPEG", quality=85)
                 img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
                 contents_parts.append(
@@ -159,10 +162,10 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                     }
                 )
 
-            # 現在アクティブな標準モデルリスト
+            # 高速モデルを先頭に配置
             candidate_models = [
-                "gemini-2.5-flash",
                 "gemini-2.5-flash-lite",
+                "gemini-2.5-flash",
                 "gemini-2.0-flash",
             ]
 
@@ -177,26 +180,36 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
-                # 503混雑対策：各モデルで3回リトライ（待機時間を段階的に伸ばす）
-                for attempt in range(3):
-                    response = requests.post(url, json=payload)
-                    res_data = response.json()
+                # 高速化のため最大2回、短時間リトライ
+                for attempt in range(2):
+                    try:
+                        # timeout=15 を設定して長時間の引っかかりを防止
+                        response = requests.post(
+                            url, json=payload, timeout=15
+                        )
+                        res_data = response.json()
 
-                    if response.status_code == 200:
-                        result_text = res_data["candidates"][0]["content"][
-                            "parts"
-                        ][0]["text"]
-                        success = True
-                        break
-                    elif response.status_code in [503, 429]:
-                        last_error_msg = res_data.get("error", {}).get(
-                            "message", "High demand error"
-                        )
-                        time.sleep(2 * (attempt + 1))  # 2秒、4秒、6秒と待機
-                    else:
-                        last_error_msg = res_data.get("error", {}).get(
-                            "message", "Unknown error"
-                        )
+                        if response.status_code == 200:
+                            result_text = res_data["candidates"][0]["content"][
+                                "parts"
+                            ][0]["text"]
+                            success = True
+                            break
+                        elif response.status_code in [503, 429]:
+                            last_error_msg = res_data.get("error", {}).get(
+                                "message", "High demand error"
+                            )
+                            time.sleep(1)  # 待ち時間を1秒に短縮
+                        else:
+                            last_error_msg = res_data.get("error", {}).get(
+                                "message", "Unknown error"
+                            )
+                            break
+                    except requests.exceptions.Timeout:
+                        last_error_msg = f"{model_name} timed out"
+                        break  # タイムアウトしたらすぐ次のモデルを試す
+                    except Exception as req_err:
+                        last_error_msg = str(req_err)
                         break
 
             if success:
