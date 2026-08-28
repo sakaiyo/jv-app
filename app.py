@@ -2,9 +2,9 @@ import base64
 import io
 import os
 import time
-import requests
 from PIL import Image
 from pillow_heif import register_heif_opener
+import requests
 import streamlit as st
 
 # HEIC（iPhone画像）対応の登録
@@ -43,7 +43,7 @@ if not api_key:
     st.warning("👈 Please set GEMINI_API_KEY in Streamlit Secrets.")
     st.stop()
 
-# リセット機能用キーの初期化
+# セッション状態の初期化
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
@@ -159,11 +159,11 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                     }
                 )
 
-            # 混雑回避用：試行するモデルの優先順位リスト
+            # 現在アクティブな標準モデルリスト
             candidate_models = [
                 "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
                 "gemini-2.0-flash",
-                "gemini-1.5-flash",
             ]
 
             payload = {"contents": [{"parts": contents_parts}]}
@@ -171,15 +171,14 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             result_text = ""
             last_error_msg = ""
 
-            # モデル切り替え & 自動リトライ処理
             for model_name in candidate_models:
                 if success:
                     break
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
-                # 各モデルで最大2回試行（2秒間隔）
-                for attempt in range(2):
+                # 503混雑対策：各モデルで3回リトライ（待機時間を段階的に伸ばす）
+                for attempt in range(3):
                     response = requests.post(url, json=payload)
                     res_data = response.json()
 
@@ -193,7 +192,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                         last_error_msg = res_data.get("error", {}).get(
                             "message", "High demand error"
                         )
-                        time.sleep(2)  # 503/429混雑時は2秒待機して再試行
+                        time.sleep(2 * (attempt + 1))  # 2秒、4秒、6秒と待機
                     else:
                         last_error_msg = res_data.get("error", {}).get(
                             "message", "Unknown error"
