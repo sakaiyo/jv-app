@@ -1,9 +1,11 @@
 import base64
 import io
 import os
+import time
+from google import genai
+from google.genai import types
 from PIL import Image
 from pillow_heif import register_heif_opener
-import requests
 import streamlit as st
 
 # HEIC（iPhone画像）対応の登録
@@ -41,6 +43,9 @@ if not st.session_state["authenticated"]:
 if not api_key:
     st.warning("👈 Please set GEMINI_API_KEY in Streamlit Secrets.")
     st.stop()
+
+# SDKクライアントの初期化
+client = genai.Client(api_key=api_key)
 
 # セッション状態の初期化
 if "uploader_key" not in st.session_state:
@@ -89,7 +94,7 @@ additional_info = st.text_input(
 
 # 査定ボタン
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
-    with st.spinner("⚡ Processing photos & analyzing..."):
+    with st.spinner("⚡ Analyzing item details..."):
         try:
             japan_premium_instruction = ""
             if is_made_in_japan:
@@ -141,59 +146,34 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
             """
 
-            contents_parts = [{"text": prompt_text}]
-
-            # 高速化のため画像を最適サイズ（長辺800px & 80%品質）に超軽量化
+            # PIL画像をそのままリサイズして用意
+            processed_images = []
             for img in images:
-                buffered = io.BytesIO()
                 img_rgb = img.convert("RGB")
-                img_rgb.thumbnail((800, 800))
-                img_rgb.save(buffered, format="JPEG", quality=80)
-                img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                img_rgb.thumbnail((1000, 1000))
+                processed_images.append(img_rgb)
 
-                contents_parts.append(
-                    {
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": img_b64,
-                        }
-                    }
-                )
+            contents = [prompt_text] + processed_images
 
-            # 最新・爆速のモデル順にチェック
-            candidate_models = [
-                "gemini-2.5-flash-lite",
-                "gemini-2.5-flash",
-                "gemini-3.5-flash",
-            ]
+            # 利用可能な公式モデルリスト（優先順）
+            candidate_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
-            payload = {"contents": [{"parts": contents_parts}]}
             success = False
             result_text = ""
             last_error_msg = ""
 
             for model_name in candidate_models:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-
                 try:
-                    # タイムアウトを30秒に拡大して安定接続
-                    response = requests.post(url, json=payload, timeout=30)
-                    res_data = response.json()
-
-                    if response.status_code == 200:
-                        result_text = res_data["candidates"][0]["content"][
-                            "parts"
-                        ][0]["text"]
+                    response = client.models.generate_content(
+                        model=model_name, contents=contents
+                    )
+                    if response.text:
+                        result_text = response.text
                         success = True
                         break
-                    else:
-                        last_error_msg = res_data.get("error", {}).get(
-                            "message", f"HTTP {response.status_code}"
-                        )
-                except requests.exceptions.Timeout:
-                    last_error_msg = f"{model_name} timeout"
-                except Exception as req_err:
-                    last_error_msg = str(req_err)
+                except Exception as model_err:
+                    last_error_msg = str(model_err)
+                    time.sleep(1)
 
             if success:
                 st.success("Evaluation complete!")
@@ -202,7 +182,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                 st.markdown(result_text)
             else:
                 st.error(
-                    f"Server response took too long. Please try clicking Evaluate again. (Details: {last_error_msg})"
+                    f"Server response failed. Please try again. (Details: {last_error_msg})"
                 )
 
         except Exception as e:
