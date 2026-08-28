@@ -1,6 +1,7 @@
 import base64
 import io
 import os
+import time
 import requests
 from PIL import Image
 from pillow_heif import register_heif_opener
@@ -34,7 +35,7 @@ if not st.session_state["authenticated"]:
         else:
             st.error("Incorrect password.")
 
-    st.stop()  # パスワード不一致時は処理を中断
+    st.stop()
 
 # --- ログイン成功時のみ以下を表示 ---
 
@@ -91,14 +92,12 @@ additional_info = st.text_input(
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     with st.spinner("Analyzing tags, materials, and details..."):
         try:
-            # Made in Japan のプロンプト指示
             japan_premium_instruction = ""
             if is_made_in_japan:
                 japan_premium_instruction = """
                 - Made in Japan Premium: The user has confirmed this item is "Made in Japan". Specify "Made in Japan" under Origin and apply a modest, realistic price adjustment for Japanese craftsmanship.
                 """
 
-            # 追加情報・修正指示のプロンプト指示
             user_notes_instruction = ""
             if additional_info.strip():
                 user_notes_instruction = f"""
@@ -106,7 +105,6 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                   Prioritize this user-provided information over purely visual guessing if there is a conflict (e.g., override brand name, material, or era as specified by the user).
                 """
 
-            # メルボルンFitzroy店舗用のリアルな評価プロンプト
             prompt_text = f"""
             You are an experienced store buyer and pricing specialist for "HOME", a curated vintage & secondhand fashion store located in Fitzroy, Melbourne, Australia.
 
@@ -161,23 +159,55 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
                     }
                 )
 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+            # 混雑回避用：試行するモデルの優先順位リスト
+            candidate_models = [
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash",
+            ]
+
             payload = {"contents": [{"parts": contents_parts}]}
+            success = False
+            result_text = ""
+            last_error_msg = ""
 
-            response = requests.post(url, json=payload)
-            res_data = response.json()
+            # モデル切り替え & 自動リトライ処理
+            for model_name in candidate_models:
+                if success:
+                    break
 
-            if response.status_code == 200:
-                result_text = res_data["candidates"][0]["content"]["parts"][0][
-                    "text"
-                ]
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+
+                # 各モデルで最大2回試行（2秒間隔）
+                for attempt in range(2):
+                    response = requests.post(url, json=payload)
+                    res_data = response.json()
+
+                    if response.status_code == 200:
+                        result_text = res_data["candidates"][0]["content"][
+                            "parts"
+                        ][0]["text"]
+                        success = True
+                        break
+                    elif response.status_code in [503, 429]:
+                        last_error_msg = res_data.get("error", {}).get(
+                            "message", "High demand error"
+                        )
+                        time.sleep(2)  # 503/429混雑時は2秒待機して再試行
+                    else:
+                        last_error_msg = res_data.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
+                        break
+
+            if success:
                 st.success("Evaluation complete!")
                 st.markdown("---")
                 st.subheader("📊 Appraisal & Listing Data")
                 st.markdown(result_text)
             else:
                 st.error(
-                    f"API Error ({response.status_code}): {res_data.get('error', {}).get('message', 'Unknown error')}"
+                    f"Server is currently busy. Please try again in a few moments. (Details: {last_error_msg})"
                 )
 
         except Exception as e:
