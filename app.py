@@ -94,96 +94,85 @@ additional_info = st.text_input(
 
 # 査定ボタン
 if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
-    with st.spinner("⚡ Analyzing item details..."):
-        try:
-            japan_premium_instruction = ""
-            if is_made_in_japan:
-                japan_premium_instruction = """
-                - Made in Japan Premium: The user has confirmed this item is "Made in Japan". Specify "Made in Japan" under Origin and apply a modest, realistic price adjustment for Japanese craftsmanship.
-                """
-
-            user_notes_instruction = ""
-            if additional_info.strip():
-                user_notes_instruction = f"""
-                - CRITICAL USER CORRECTION / NOTES: The user provided the following supplementary context: "{additional_info.strip()}".
-                  Prioritize this user-provided information over purely visual guessing if there is a conflict (e.g., override brand name, material, or era as specified by the user).
-                """
-
-            prompt_text = f"""
-            You are an experienced store buyer and pricing specialist for "HOME", a curated vintage & secondhand fashion store located in Fitzroy, Melbourne, Australia.
-
-            【Core Pricing Philosophy - VERY IMPORTANT】
-            - Target Market: Physical store in Fitzroy, Melbourne & local Australian webstore.
-            - Currency: Australian Dollars (AUD $).
-            - Pricing Goal: Provide a REALISTIC, FAIR, and SELLABLE retail price in AUD that balances healthy store profit margin with good inventory turnover.
-            - DO NOT base prices on hyper-inflated top-tier international online asking prices (e.g., peak Grailed or eBay asking prices).
-            - Be realistic about tags and origins: Rare 80s/90s Made in Japan grails command higher value, but standard commercial streetwear lines, general brand items, or Made in China/Vietnam garments must be priced pragmatically for immediate store sales in Melbourne.
-
-            【Background & Context】
-            - All items are authentically handpicked and sourced directly from Japan.
-            - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
-            {japan_premium_instruction}
-            {user_notes_instruction}
-
-            【Requirements for Description Field】
-            - Keep it CONCISE and impactful (strictly 2-3 sentences total, approx. 50 words).
-            - Highlight key brand lore/origin, material quality, and notable design or vintage appraisal details without fluff.
-
-            【Requirements for Tag Title Field】
-            - Ultra-short, catchy, and concise phrase (3-7 words max) designed for handwritten paper price tags.
-            - Examples: "Rare 90s Wool Trench Coat", "100% Silk / Made in Japan", "Archival 2000s Graphic Tee".
-
-            【Output Format】(Respond strictly in English using the exact keys below)
-            1. Brand: 
-            2. Category: (e.g., Tailored Jacket, Denim Jeans, Graphic Tee)
-            3. Size: (Tag size, or estimated size if missing)
-            4. Material: (e.g., 100% Wool, Cotton Blend)
-            5. Era: (e.g., 1990s, Early 2000s, Vintage)
-            6. Origin: Sourced from Japan (Add "Made in Japan" if confirmed or visible)
-            7. Suggested Retail Price: (Realistic Fitzroy retail price in AUD $, e.g., $280 AUD)
-            8. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
-            9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
-            10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
+    try:
+        japan_premium_instruction = ""
+        if is_made_in_japan:
+            japan_premium_instruction = """
+            - Made in Japan Premium: The user has confirmed this item is "Made in Japan". Specify "Made in Japan" under Origin and apply a modest, realistic price adjustment for Japanese craftsmanship.
             """
 
-            # 画像を軽量化（長辺1000pxに圧縮）
-            processed_images = []
-            for img in images:
-                img_rgb = img.convert("RGB")
-                img_rgb.thumbnail((1000, 1000))
-                processed_images.append(img_rgb)
+        user_notes_instruction = ""
+        if additional_info.strip():
+            user_notes_instruction = f"""
+            - CRITICAL USER CORRECTION / NOTES: The user provided the following supplementary context: "{additional_info.strip()}".
+              Prioritize this user-provided information over purely visual guessing if there is a conflict (e.g., override brand name, material, or era as specified by the user).
+            """
 
-            contents = [prompt_text] + processed_images
+        prompt_text = f"""
+        You are an experienced store buyer and pricing specialist for "HOME", a curated vintage & secondhand fashion store located in Fitzroy, Melbourne, Australia.
 
-            # 現在利用可能な最新公式モデル（優先順）
-            candidate_models = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
+        【Core Pricing Philosophy - VERY IMPORTANT】
+        - Target Market: Physical store in Fitzroy, Melbourne & local Australian webstore.
+        - Currency: Australian Dollars (AUD $).
+        - Pricing Goal: Provide a REALISTIC, FAIR, and SELLABLE retail price in AUD that balances healthy store profit margin with good inventory turnover.
+        - DO NOT base prices on hyper-inflated top-tier international online asking prices (e.g., peak Grailed or eBay asking prices).
+        - Be realistic about tags and origins: Rare 80s/90s Made in Japan grails command higher value, but standard commercial streetwear lines, general brand items, or Made in China/Vietnam garments must be priced pragmatically for immediate store sales in Melbourne.
 
-            success = False
-            result_text = ""
-            last_error_msg = ""
+        【Background & Context】
+        - All items are authentically handpicked and sourced directly from Japan.
+        - Evaluate the photos provided (full item view, brand tags, care/material tags, details) and generate precise listing and appraisal data in ENGLISH.
+        {japan_premium_instruction}
+        {user_notes_instruction}
 
-            for model_name in candidate_models:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name, contents=contents
-                    )
-                    if response.text:
-                        result_text = response.text
-                        success = True
-                        break
-                except Exception as model_err:
-                    last_error_msg = str(model_err)
-                    time.sleep(1)
+        【Requirements for Description Field】
+        - Keep it CONCISE and impactful (strictly 2-3 sentences total, approx. 50 words).
+        - Highlight key brand lore/origin, material quality, and notable design or vintage appraisal details without fluff.
 
-            if success:
-                st.success("Evaluation complete!")
-                st.markdown("---")
-                st.subheader("📊 Appraisal & Listing Data")
-                st.markdown(result_text)
-            else:
-                st.error(
-                    f"Server response failed. Please try again. (Details: {last_error_msg})"
-                )
+        【Requirements for Tag Title Field】
+        - Ultra-short, catchy, and concise phrase (3-7 words max) designed for handwritten paper price tags.
+        - Examples: "Rare 90s Wool Trench Coat", "100% Silk / Made in Japan", "Archival 2000s Graphic Tee".
 
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        【Output Format】(Respond strictly in English using the exact keys below)
+        1. Brand: 
+        2. Category: (e.g., Tailored Jacket, Denim Jeans, Graphic Tee)
+        3. Size: (Tag size, or estimated size if missing)
+        4. Material: (e.g., 100% Wool, Cotton Blend)
+        5. Era: (e.g., 1990s, Early 2000s, Vintage)
+        6. Origin: Sourced from Japan (Add "Made in Japan" if confirmed or visible)
+        7. Suggested Retail Price: (Realistic Fitzroy retail price in AUD $, e.g., $280 AUD)
+        8. Description: (Concise 2-3 sentences max covering brand context, key material/details, and vintage significance)
+        9. Square Title: (e.g., Burberrys Wool Tailored Jacket - Size 11R)
+        10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
+        """
+
+        # 画像の軽量化（長辺800pxに圧縮して通信を最速化）
+        processed_images = []
+        for img in images:
+            img_rgb = img.convert("RGB")
+            img_rgb.thumbnail((800, 800))
+            processed_images.append(img_rgb)
+
+        contents = [prompt_text] + processed_images
+
+        st.markdown("---")
+        st.subheader("📊 Appraisal & Listing Data")
+
+        # リアルタイムで書き出される文字用のプレースホルダー
+        response_placeholder = st.empty()
+
+        # ストリーミング生成（出た文字から順次表示）
+        response_stream = client.models.generate_content_stream(
+            model="gemini-2.5-flash", contents=contents
+        )
+
+        full_text = ""
+        for chunk in response_stream:
+            if chunk.text:
+                full_text += chunk.text
+                response_placeholder.markdown(full_text + "▌")
+
+        response_placeholder.markdown(full_text)
+        st.success("⚡ Evaluation complete!")
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
