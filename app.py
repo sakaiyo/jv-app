@@ -146,7 +146,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
             """
 
-            # PIL画像をそのままリサイズして用意
+            # 画像を軽量化（長辺1000pxに圧縮）
             processed_images = []
             for img in images:
                 img_rgb = img.convert("RGB")
@@ -155,8 +155,8 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
 
             contents = [prompt_text] + processed_images
 
-            # 利用可能な公式モデルリスト（優先順）
-            candidate_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+            # 現在利用可能な最新公式モデル（優先順）
+            candidate_models = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
 
             success = False
             result_text = ""
