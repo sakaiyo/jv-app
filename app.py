@@ -144,11 +144,11 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     10. Tag Title: (Ultra-short catchy phrase for handwritten price tags)
     """
 
-    # 画像の軽量化（長辺800pxに圧縮して通信速度向上）
+    # 画像データ変換（長辺600pxに軽量化して転送を高速化）
     processed_images = []
     for img in images:
         img_rgb = img.convert("RGB")
-        img_rgb.thumbnail((800, 800))
+        img_rgb.thumbnail((600, 600))
         processed_images.append(img_rgb)
 
     contents = [prompt_text] + processed_images
@@ -157,40 +157,34 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
     st.subheader("📊 Appraisal & Listing Data")
     response_placeholder = st.empty()
 
-    # 混雑時に試行するモデル候補（503が出たら次のモデルへフォールバック）
-    candidate_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    # 有効な最新モデルの候補（優先順位順）
+    candidate_models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
 
     success = False
     last_error = ""
 
-    for model_name in candidate_models:
-        if success:
-            break
-
-        # 各モデルで最大2回（短時間再試行）
-        for attempt in range(2):
+    with st.spinner("⚡ Analyzing item..."):
+        for model_name in candidate_models:
+            if success:
+                break
             try:
-                response_stream = client.models.generate_content_stream(
+                # 呼び出しの実行
+                response = client.models.generate_content(
                     model=model_name, contents=contents
                 )
 
-                full_text = ""
-                for chunk in response_stream:
-                    if chunk.text:
-                        full_text += chunk.text
-                        response_placeholder.markdown(full_text + "▌")
-
-                response_placeholder.markdown(full_text)
-                st.success("⚡ Evaluation complete!")
-                success = True
-                break
+                if response.text:
+                    response_placeholder.markdown(response.text)
+                    st.success("⚡ Evaluation complete!")
+                    success = True
+                    break
 
             except Exception as e:
                 last_error = str(e)
-                # 503エラーなどの混雑時、1.5秒だけ待って再試行または次のモデルへ
-                time.sleep(1.5)
+                # 混雑時（503等）は少し待って次のモデルへ自動切り替え
+                time.sleep(1)
 
     if not success:
         st.error(
-            f"Server is temporarily busy. Please click Evaluate again. (Details: {last_error})"
+            f"All models are currently busy. Please click Evaluate again. (Details: {last_error})"
         )
