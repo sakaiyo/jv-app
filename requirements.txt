@@ -1,4 +1,6 @@
 streamlit
-requests
-Pillow
+pillow
 pillow-heif
+requests
+pandas
+google-genai
