@@ -5,10 +5,9 @@ from PIL import Image
 from pillow_heif import register_heif_opener
 import streamlit as st
 
-# HEIC（iPhone画像）対応の登録
+# HEIC対応
 register_heif_opener()
 
-# 画面設定
 st.set_page_config(page_title="Vintage AI Evaluator", layout="wide")
 st.title("👕 Vintage AI Evaluator & Data Generator")
 
@@ -98,7 +97,7 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
             10. Tag Title: (3-7 words max)
             """
 
-            # 通信速度を上げるための画像軽量化（長辺800px）
+            # 速度を上げるための画像軽量化（長辺800px）
             processed_images = []
             for img in images:
                 img_rgb = img.convert("RGB")
@@ -107,9 +106,9 @@ if st.button("🚀 Evaluate Item", type="primary", disabled=not images):
 
             contents = [prompt_text] + processed_images
 
-            # 確実で最速の公式実在モデルのみを指定
+            # APIが推奨する最新の軽量モデルのみを指定
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-3.5-flash-lite",
                 contents=contents
             )
 
